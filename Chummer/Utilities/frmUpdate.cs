@@ -107,21 +107,33 @@ namespace Chummer
         private void frmUpdate_FormClosing(object sender, FormClosingEventArgs e)
         {
             _blnFormClosing = true;
-            _objConnectionLoaderCancellationTokenSource?.Cancel(false);
+            if (_objConnectionLoaderCancellationTokenSource != null)
+            {
+                _objConnectionLoaderCancellationTokenSource.Cancel(false);
+                _objConnectionLoaderCancellationTokenSource.Dispose();
+            }
+
             _clientDownloader.CancelAsync();
             _clientChangelogDownloader.CancelAsync();
         }
 
         private async Task DownloadChangelog()
         {
-            _objConnectionLoaderCancellationTokenSource?.Cancel(false);
+            if (_objConnectionLoaderCancellationTokenSource != null)
+            {
+                _objConnectionLoaderCancellationTokenSource.Cancel(false);
+                _objConnectionLoaderCancellationTokenSource.Dispose();
+            }
             _objConnectionLoaderCancellationTokenSource = new CancellationTokenSource();
             try
             {
                 if (_tskConnectionLoader?.IsCompleted == false)
                     await _tskConnectionLoader;
             }
-            catch (TaskCanceledException) { }
+            catch (TaskCanceledException)
+            {
+                // Swallow this
+            }
             _tskConnectionLoader = Task.Run(async () =>
             {
                 await LoadConnection();
@@ -688,12 +700,15 @@ namespace Chummer
                     }
                     catch (IOException)
                     {
+                        // Swallow this
                     }
                     catch (NotSupportedException)
                     {
+                        // Swallow this
                     }
                     catch (UnauthorizedAccessException)
                     {
+                        // Swallow this
                     }
                 }
             }

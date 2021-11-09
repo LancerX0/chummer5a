@@ -227,6 +227,7 @@ namespace Chummer
                 }
                 catch (IOException)
                 {
+                    // Swallow this
                 }
             }
 
@@ -358,6 +359,7 @@ namespace Chummer
             }
             catch (CultureNotFoundException)
             {
+                // Swallow this
             }
             if (_blnLoading)
                 return;
@@ -449,7 +451,10 @@ namespace Chummer
                 if (_tskRefresher?.IsCompleted == false)
                     await _tskRefresher;
             }
-            catch (TaskCanceledException) { }
+            catch (TaskCanceledException)
+            {
+                // Swallow this
+            }
             _tskRefresher = Task.Run(RefreshCharacterXml, _objRefresherCancellationTokenSource.Token);
         }
 
@@ -465,7 +470,10 @@ namespace Chummer
                 if (_tskOutputGenerator?.IsCompleted == false)
                     await _tskOutputGenerator;
             }
-            catch (TaskCanceledException) { }
+            catch (TaskCanceledException)
+            {
+                // Swallow this
+            }
             _tskOutputGenerator = Task.Run(AsyncGenerateOutput, _objOutputGeneratorCancellationTokenSource.Token);
         }
 
@@ -518,16 +526,37 @@ namespace Chummer
                     Program.MainForm.ShowMessageBox(this, strReturn);
                     return;
                 }
-#if DEBUG
-                XslCompiledTransform objXslTransform = new XslCompiledTransform(true);
-#else
-                XslCompiledTransform objXslTransform = new XslCompiledTransform();
-#endif
+
+                XslCompiledTransform objXslTransform;
                 try
                 {
-                    objXslTransform.Load(strXslPath);
+                    objXslTransform = XslManager.GetTransformForFile(strXslPath);
                 }
-                catch (Exception ex)
+                catch (ArgumentException)
+                {
+                    string strReturn = "Last write time could not be fetched when attempting to load " + _strSelectedSheet +
+                                       Environment.NewLine;
+                    Log.Debug(strReturn);
+                    Program.MainForm.ShowMessageBox(this, strReturn);
+                    return;
+                }
+                catch (PathTooLongException)
+                {
+                    string strReturn = "Last write time could not be fetched when attempting to load " + _strSelectedSheet +
+                                       Environment.NewLine;
+                    Log.Debug(strReturn);
+                    Program.MainForm.ShowMessageBox(this, strReturn);
+                    return;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    string strReturn = "Last write time could not be fetched when attempting to load " + _strSelectedSheet +
+                                       Environment.NewLine;
+                    Log.Debug(strReturn);
+                    Program.MainForm.ShowMessageBox(this, strReturn);
+                    return;
+                }
+                catch (XsltException ex)
                 {
                     string strReturn = "Error attempting to load " + _strSelectedSheet + Environment.NewLine;
                     Log.Debug(strReturn);
@@ -635,12 +664,15 @@ namespace Chummer
                 }
                 catch (UnauthorizedAccessException)
                 {
+                    // Swallow this
                 }
                 catch (IOException)
                 {
+                    // Swallow this
                 }
                 catch (SecurityException)
                 {
+                    // Swallow this
                 }
 
                 // webBrowser can only print to the default printer, so we (temporarily) change it to the PDF printer
@@ -681,12 +713,15 @@ namespace Chummer
                 }
                 catch (UnauthorizedAccessException)
                 {
+                    // Swallow this
                 }
                 catch (IOException)
                 {
+                    // Swallow this
                 }
                 catch (SecurityException)
                 {
+                    // Swallow this
                 }
             }
 

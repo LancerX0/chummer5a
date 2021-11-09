@@ -1616,11 +1616,11 @@
     </string>
     <string>
       <key>Menu_FileSaveAsCreated</key>
-      <text>Save As &amp;Created</text>
+      <text>Save As C&amp;reated</text>
     </string>
     <string>
       <key>Menu_FileExport</key>
-      <text>Export</text>
+      <text>&amp;Export</text>
     </string>
     <string>
       <key>Menu_FilePrint</key>
@@ -1632,7 +1632,7 @@
     </string>
     <string>
       <key>Menu_FileClose</key>
-      <text>Close</text>
+      <text>&amp;Close</text>
     </string>
     <string>
       <key>Menu_SpecialAddCyberwareSuite</key>
@@ -2379,6 +2379,14 @@
       <text>Cannot Remove Cyberware</text>
     </string>
     <string>
+      <key>MessageTitle_FoundPDFsInFolder</key>
+      <text>Scan finished</text>
+    </string>
+    <string>
+      <key>Message_FoundPDFsInFolder</key>
+      <text>Chummer found PDF files for {0} sourcebooks in the folder {1}.</text>
+    </string>
+    <string>
       <key>Message_ComplexFormLimit</key>
       <text>You cannot have more complex forms than twice your RES score. Ref: Page 98, SR5 Core (Errata).</text>
     </string>
@@ -2756,11 +2764,11 @@
     </string>
     <string>
       <key>Message_InvalidAvail</key>
-      <text>{0} more items with Avail higher than {1} than allowed</text>
+      <text>{0} item(s) with Avail higher than the allowed availability of {1}:</text>
     </string>
     <string>
       <key>Message_RestrictedGearUsed</key>
-      <text>Restricted Gear was used on:\n{0}</text>
+      <text>Restricted Gear was used on:{0}</text>
     </string>
     <string>
       <key>Message_InvalidCyberwareGrades</key>
@@ -5848,8 +5856,20 @@
       <text>Compensate for higher karma costs when raising the rating of the last skill in a skill group</text>
     </string>
     <string>
+      <key>Label_CharacterOptions_4eAdaptations</key>
+      <text>4th Edition Adaptations</text>
+    </string>
+    <string>
+      <key>Checkbox_Options_Enable4eStyleEnemyTracking</key>
+      <text>Use 4th Edition Rules for Enemies as a Contact type</text>
+    </string>
+    <string>
+      <key>Label_Options_KarmaGainedFromEnemies</key>
+      <text>Karma gain from Enemies</text>
+    </string>
+    <string>
       <key>Checkbox_Options_EnemyKarmaQualityLimit</key>
-      <text>Karma spent on enemies counts towards negative Quality limit in create mode</text>
+      <text>Karma gained from Enemies counts towards Negative Quality limit in Create mode</text>
     </string>
     <string>
       <key>Checkbox_Options_EnablePlugins</key>
@@ -7841,6 +7861,10 @@
     <string>
       <key>Button_Options_PDFTest</key>
       <text>Test - Open to Page 5</text>
+    </string>
+    <string>
+      <key>Button_Options_PDFFolderScan</key>
+      <text>Scan a Folder for PDF Files</text>
     </string>
     <string>
       <key>Checkbox_Options_OpenPDFsAsURLs</key>
@@ -9924,8 +9948,20 @@
       <text>Saving {0}...</text>
     </string>
     <string>
+      <key>String_Scanning</key>
+      <text>Scanning...</text>
+    </string>
+    <string>
+      <key>String_Scanning_Pattern</key>
+      <text>Scanning {0}...</text>
+    </string>
+    <string>
       <key>String_Initializing</key>
       <text>Initializing...</text>
+    </string>
+    <string>
+      <key>String_Initializing_Pattern</key>
+      <text>Initializing {0}...</text>
     </string>
     <string>
       <key>String_Settings</key>
@@ -10456,6 +10492,10 @@
     <string>
       <key>String_CapacityRemaining</key>
       <text>{0} ({1} remaining)</text>
+    </string>
+    <string>
+      <key>Error_Message_PDF_IndexOutOfBounds</key>
+      <text>The PDF File has a wrong page offset value set in the global options.</text>
     </string>
   </strings>
 </chummer>

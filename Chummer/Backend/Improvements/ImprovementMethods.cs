@@ -340,8 +340,6 @@ namespace Chummer
                     return objImprovementAdder.hardwires;
                 case "DAMAGERESISTANCE":
                     return objImprovementAdder.damageresistance;
-                case "RESTRICTEDITEMCOUNT":
-                    return objImprovementAdder.restricteditemcount;
                 case "JUDGEINTENTIONS":
                     return objImprovementAdder.judgeintentions;
                 case "JUDGEINTENTIONSOFFENSE":
@@ -614,6 +612,8 @@ namespace Chummer
                     return objImprovementAdder.addware;
                 case "WEAPONACCURACY":
                     return objImprovementAdder.weaponaccuracy;
+                case "WEAPONRANGEMODIFIER":
+                    return objImprovementAdder.weaponrangemodifier;
                 case "WEAPONSKILLACCURACY":
                     return objImprovementAdder.weaponskillaccuracy;
                 case "METAGENICLIMIT":

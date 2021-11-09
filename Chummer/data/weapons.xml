@@ -15086,7 +15086,7 @@
       <name>Krime Varmint</name>
       <category>Heavy Pistols</category>
       <type>Ranged</type>
-      <conceal>0</conceal>
+      <conceal>2</conceal>
       <accuracy>4</accuracy>
       <reach>0</reach>
       <damage>8P</damage>
@@ -15112,6 +15112,7 @@
         <mount>Stock</mount>
         <mount>Side</mount>
       </accessorymounts>
+      <range>Submachine Guns</range>
       <spec>Semi-Automatics</spec>
     </weapon>
     <weapon>
@@ -17625,6 +17626,13 @@
         </weapondetails>
       </forbidden>
       <rating>0</rating>
+      <required>
+        <oneof>
+          <accessory>Smartgun System, Internal</accessory>
+          <accessory>Smartgun System, External</accessory>
+          <accessory>Krime Dual-Mode External Smartgun Link</accessory>
+        </oneof>
+      </required>
     </accessory>
     <accessory>
       <id>85b01b5c-c788-4b43-8190-9e0c18391436</id>

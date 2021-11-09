@@ -260,7 +260,7 @@ namespace Chummer
                     if (uintAccumulator == uint.MaxValue)
                     {
                         uintAccumulator = 0;
-                        strSeparator += "_";
+                        strSeparator += '_';
                     }
                     uintAccumulator += 1;
                 }
@@ -305,7 +305,7 @@ namespace Chummer
                     StringBuilder sbdConflictingCharacters = new StringBuilder();
                     foreach (Character objCharacter in Program.MainForm.OpenCharacters)
                     {
-                        if (!objCharacter.Created && objCharacter.Settings == _objReferenceCharacterSettings)
+                        if (!objCharacter.Created && ReferenceEquals(objCharacter.Settings, _objReferenceCharacterSettings))
                             sbdConflictingCharacters.AppendLine(objCharacter.CharacterName);
                     }
                     if (sbdConflictingCharacters.Length > 0)
@@ -515,9 +515,9 @@ namespace Chummer
                 {
                     objNode.Checked = _blnSourcebookToggle;
                     if (_blnSourcebookToggle)
-                        _objCharacterSettings.Books.Add(strBookCode);
+                        _objCharacterSettings.BooksWritable.Add(strBookCode);
                     else
-                        _objCharacterSettings.Books.Remove(strBookCode);
+                        _objCharacterSettings.BooksWritable.Remove(strBookCode);
                 }
             }
             _blnLoading = false;
@@ -542,9 +542,9 @@ namespace Chummer
                 return;
             }
             if (objNode.Checked)
-                _objCharacterSettings.Books.Add(strBookCode);
+                _objCharacterSettings.BooksWritable.Add(strBookCode);
             else
-                _objCharacterSettings.Books.Remove(strBookCode);
+                _objCharacterSettings.BooksWritable.Remove(strBookCode);
             _objCharacterSettings.RecalculateBookXPath();
             _objCharacterSettings.OnPropertyChanged(nameof(CharacterSettings.Books));
         }
@@ -791,7 +791,7 @@ namespace Chummer
                 if (objXmlBook.SelectSingleNode("permanent") != null)
                 {
                     _setPermanentSourcebooks.Add(strCode);
-                    _objCharacterSettings.Books.Add(strCode);
+                    _objCharacterSettings.BooksWritable.Add(strCode);
                     blnChecked = true;
                 }
                 TreeNode objNode = new TreeNode
@@ -1102,8 +1102,8 @@ namespace Chummer
             txtContactPoints.DoDataBinding("Text", _objCharacterSettings, nameof(CharacterSettings.ContactPointsExpression));
             txtKnowledgePoints.DoDataBinding("Text", _objCharacterSettings, nameof(CharacterSettings.KnowledgePointsExpression));
             txtNuyenExpression.DoDataBinding("Text", _objCharacterSettings, nameof(CharacterSettings.ChargenKarmaToNuyenExpression));
-            txtRegisteredSpriteLimit.DoDataBinding("Text", _objCharacterSettings, nameof(CharacterSettings.RegisteredSpriteLimit));
-            txtBoundSpiritLimit.DoDataBinding("Text", _objCharacterSettings, nameof(CharacterSettings.BoundSpiritLimit));
+            txtRegisteredSpriteLimit.DoDataBinding("Text", _objCharacterSettings, nameof(CharacterSettings.RegisteredSpriteExpression));
+            txtBoundSpiritLimit.DoDataBinding("Text", _objCharacterSettings, nameof(CharacterSettings.BoundSpiritExpression));
 
             chkEnforceCapacity.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.EnforceCapacity));
             chkLicenseEachRestrictedItem.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.LicenseRestricted));
@@ -1114,7 +1114,6 @@ namespace Chummer
             chkStrictSkillGroups.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.StrictSkillGroupsInCreateMode));
             chkAllowPointBuySpecializationsOnKarmaSkills.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.AllowPointBuySpecializationsOnKarmaSkills));
             chkAllowFreeGrids.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.AllowFreeGrids));
-            chkEnemyKarmaQualityLimit.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.EnemyKarmaQualityLimit));
 
             chkDontUseCyberlimbCalculation.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.DontUseCyberlimbCalculation));
             chkCyberlegMovement.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.CyberlegMovement));
@@ -1131,7 +1130,13 @@ namespace Chummer
             nudEssenceDecimals.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.EssenceDecimals));
             chkDontRoundEssenceInternally.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.DontRoundEssenceInternally));
 
+            chkEnable4eStyleEnemyTracking.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.EnableEnemyTracking));
+            flpKarmaGainedFromEnemies.DoOneWayDataBinding("Enabled", _objCharacterSettings, nameof(CharacterSettings.EnableEnemyTracking));
+            nudKarmaGainedFromEnemies.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaEnemy));
+            chkEnemyKarmaQualityLimit.DoOneWayDataBinding("Enabled", _objCharacterSettings, nameof(CharacterSettings.EnableEnemyTracking));
+            chkEnemyKarmaQualityLimit.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.EnemyKarmaQualityLimit));
             chkMoreLethalGameplay.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.MoreLethalGameplay));
+
             chkNoArmorEncumbrance.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.NoArmorEncumbrance));
             chkIgnoreArt.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.IgnoreArt));
             chkIgnoreComplexFormLimit.DoDataBinding("Checked", _objCharacterSettings, nameof(CharacterSettings.IgnoreComplexFormLimit));
@@ -1187,7 +1192,6 @@ namespace Chummer
             nudKarmaNewAIAdvancedProgram.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaNewAIAdvancedProgram));
             nudKarmaMetamagic.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaMetamagic));
             nudKarmaContact.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaContact));
-            nudKarmaEnemy.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaEnemy));
             nudKarmaCarryover.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaCarryover));
             nudKarmaSpirit.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaSpirit));
             nudKarmaSpiritFettering.DoDataBinding("Value", _objCharacterSettings, nameof(CharacterSettings.KarmaSpiritFettering));
@@ -1229,7 +1233,7 @@ namespace Chummer
             foreach (KeyValuePair<string, CharacterSettings> kvpCharacterSettingsEntry in SettingsManager.LoadedCharacterSettings)
             {
                 _lstSettings.Add(new ListItem(kvpCharacterSettingsEntry.Key, kvpCharacterSettingsEntry.Value.DisplayName));
-                if (_objReferenceCharacterSettings == kvpCharacterSettingsEntry.Value)
+                if (ReferenceEquals(_objReferenceCharacterSettings, kvpCharacterSettingsEntry.Value))
                     strSelect = kvpCharacterSettingsEntry.Key;
             }
             _lstSettings.Sort(CompareListItems.CompareNames);

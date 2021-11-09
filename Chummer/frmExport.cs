@@ -29,12 +29,14 @@ using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Xsl;
 using Newtonsoft.Json;
+using NLog;
 using Formatting = Newtonsoft.Json.Formatting;
 
 namespace Chummer
 {
     public partial class frmExport : Form
     {
+        private static Logger Log { get; } = LogManager.GetCurrentClassLogger();
         private readonly Character _objCharacter;
         private readonly ConcurrentDictionary<Tuple<string, string>, Tuple<string, string>> _dicCache = new ConcurrentDictionary<Tuple<string, string>, Tuple<string, string>>();
         private CancellationTokenSource _objCharacterXmlGeneratorCancellationTokenSource;
@@ -84,8 +86,16 @@ namespace Chummer
 
         private void frmExport_FormClosing(object sender, FormClosingEventArgs e)
         {
-            _objXmlGeneratorCancellationTokenSource?.Cancel(false);
-            _objCharacterXmlGeneratorCancellationTokenSource?.Cancel(false);
+            if (_objXmlGeneratorCancellationTokenSource != null)
+            {
+                _objXmlGeneratorCancellationTokenSource.Cancel(false);
+                _objXmlGeneratorCancellationTokenSource.Dispose();
+            }
+            if (_objCharacterXmlGeneratorCancellationTokenSource != null)
+            {
+                _objCharacterXmlGeneratorCancellationTokenSource.Cancel(false);
+                _objCharacterXmlGeneratorCancellationTokenSource.Dispose();
+            }
         }
 
         private void cmdCancel_Click(object sender, EventArgs e)
@@ -132,6 +142,7 @@ namespace Chummer
             }
             catch (CultureNotFoundException)
             {
+                // Swallow this
             }
             _objCharacterXml = null;
             await Task.WhenAll(
@@ -147,14 +158,22 @@ namespace Chummer
                 return;
             if (_objCharacterXml == null)
             {
-                _objCharacterXmlGeneratorCancellationTokenSource?.Cancel(false);
+                if (_objCharacterXmlGeneratorCancellationTokenSource != null)
+                {
+                    _objCharacterXmlGeneratorCancellationTokenSource.Cancel(false);
+                    _objCharacterXmlGeneratorCancellationTokenSource.Dispose();
+                }
+
                 _objCharacterXmlGeneratorCancellationTokenSource = new CancellationTokenSource();
                 try
                 {
                     if (_tskCharacterXmlGenerator?.IsCompleted == false)
                         await _tskCharacterXmlGenerator;
                 }
-                catch (TaskCanceledException) { }
+                catch (TaskCanceledException)
+                {
+                    // Swallow this
+                }
                 _tskCharacterXmlGenerator = Task.Run(GenerateCharacterXml, _objCharacterXmlGeneratorCancellationTokenSource.Token);
                 return;
             }
@@ -172,14 +191,22 @@ namespace Chummer
                 }
                 else
                 {
-                    _objXmlGeneratorCancellationTokenSource?.Cancel(false);
+                    if (_objXmlGeneratorCancellationTokenSource != null)
+                    {
+                        _objXmlGeneratorCancellationTokenSource.Cancel(false);
+                        _objXmlGeneratorCancellationTokenSource.Dispose();
+                    }
+
                     _objXmlGeneratorCancellationTokenSource = new CancellationTokenSource();
                     try
                     {
                         if (_tskXmlGenerator?.IsCompleted == false)
                             await _tskXmlGenerator;
                     }
-                    catch (TaskCanceledException) { }
+                    catch (TaskCanceledException)
+                    {
+                        // Swallow this
+                    }
                     _tskXmlGenerator = _strXslt == "Export JSON"
                         ? Task.Run(GenerateJson, _objXmlGeneratorCancellationTokenSource.Token)
                         : Task.Run(GenerateXml, _objXmlGeneratorCancellationTokenSource.Token);
@@ -274,11 +301,49 @@ namespace Chummer
                 try
                 {
                     string exportSheetPath = Path.Combine(Utils.GetStartupPath, "export", _strXslt + ".xsl");
+                    
+                    XslCompiledTransform objXslTransform;
+                    try
+                    {
+                        objXslTransform = XslManager.GetTransformForFile(exportSheetPath); // Use the path for the export sheet.
+                    }
+                    catch (ArgumentException)
+                    {
+                        string strReturn = "Last write time could not be fetched when attempting to load " + _strXslt +
+                                           Environment.NewLine;
+                        Log.Debug(strReturn);
+                        SetTextToWorkerResult(strReturn);
+                        return;
+                    }
+                    catch (PathTooLongException)
+                    {
+                        string strReturn = "Last write time could not be fetched when attempting to load " + _strXslt +
+                                           Environment.NewLine;
+                        Log.Debug(strReturn);
+                        SetTextToWorkerResult(strReturn);
+                        return;
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        string strReturn = "Last write time could not be fetched when attempting to load " + _strXslt +
+                                           Environment.NewLine;
+                        Log.Debug(strReturn);
+                        SetTextToWorkerResult(strReturn);
+                        return;
+                    }
+                    catch (XsltException ex)
+                    {
+                        string strReturn = "Error attempting to load " + _strXslt + Environment.NewLine;
+                        Log.Debug(strReturn);
+                        Log.Error("ERROR Message = " + ex.Message);
+                        strReturn += ex.Message;
+                        SetTextToWorkerResult(strReturn);
+                        return;
+                    }
 
-                    XslCompiledTransform objXslTransform = new XslCompiledTransform();
-                    objXslTransform.Load(exportSheetPath); // Use the path for the export sheet.
                     if (_objXmlGeneratorCancellationTokenSource.IsCancellationRequested)
                         return;
+
                     XmlWriterSettings objSettings = objXslTransform.OutputSettings.Clone();
                     objSettings.CheckCharacters = false;
                     objSettings.ConformanceLevel = ConformanceLevel.Fragment;

@@ -307,6 +307,13 @@ namespace Chummer
                             }
                         }
 
+                        if (!CharacterObjectSettings.EnableEnemyTracking)
+                        {
+                            tabPeople.TabPages.Remove(tabEnemies);
+                            lblEnemiesBP.Visible = false;
+                            lblBuildEnemies.Visible = false;
+                        }
+
                         RefreshQualities(treQualities, cmsQuality);
                         RefreshSpirits(panSpirits, panSprites);
                         RefreshSpells(treSpells, treMetamagic, cmsSpell, cmsInitiationNotes);
@@ -1779,6 +1786,30 @@ namespace Chummer
 
                         break;
                     }
+                case nameof(CharacterSettings.EnableEnemyTracking):
+                {
+                    using (new CursorWait(this))
+                    {
+                        SuspendLayout();
+                        if (!CharacterObjectSettings.EnableEnemyTracking)
+                        {
+                            tabPeople.TabPages.Remove(tabEnemies);
+                            lblEnemiesBP.Visible = false;
+                            lblBuildEnemies.Visible = false;
+                        }
+                        else
+                        {
+                            lblEnemiesBP.Visible = true;
+                            lblBuildEnemies.Visible = true;
+                            if (!tabPeople.TabPages.Contains(tabEnemies))
+                                tabPeople.TabPages.Insert(tabPeople.TabPages.IndexOf(tabContacts) + 1, tabEnemies);
+                            RefreshContacts(panContacts, panEnemies, panPets);
+                        }
+                        ResumeLayout();
+                    }
+
+                    break;
+                }
             }
         }
 
@@ -4461,7 +4492,7 @@ namespace Chummer
                             xmlAddModCategory = objXmlArmor["addmodcategory"];
                             if (xmlAddModCategory != null)
                             {
-                                frmPickArmorMod.AllowedCategories += "," + xmlAddModCategory.InnerText;
+                                frmPickArmorMod.AllowedCategories += ',' + xmlAddModCategory.InnerText;
                             }
                         }
 
@@ -11017,7 +11048,7 @@ namespace Chummer
 
                 using (frmLoading frmProgressBar = frmChummerMain.CreateAndShowProgressBar())
                 {
-                    frmProgressBar.PerformStep(CharacterObject.CharacterName, true);
+                    frmProgressBar.PerformStep(CharacterObject.CharacterName, frmLoading.ProgressBarTextPatterns.Saving);
                     if (!CharacterObject.Save())
                     {
                         CharacterObject.ExpenseEntries.Clear();
@@ -12717,13 +12748,6 @@ namespace Chummer
             StringBuilder sbdMessage = new StringBuilder(LanguageManager.GetString("Message_InvalidBeginning"));
             using (new CursorWait(this))
             {
-                // Number of items over the specified Availability the character is allowed to have (typically from the Restricted Gear Quality).
-                int intRestrictedAllowed = ImprovementManager.ValueOf(CharacterObject, Improvement.ImprovementType.RestrictedItemCount).StandardRound();
-                int intRestrictedCount = 0;
-                string strAvailItems = string.Empty;
-                string strExConItems = string.Empty;
-                string strCyberwareGrade = string.Empty;
-
                 // Check if the character has more than 1 Martial Art, not counting qualities. TODO: Make the OTP check an optional rule. Make the Martial Arts limit an optional rule.
                 int intMartialArts = CharacterObject.MartialArts.Count(objArt => !objArt.IsQuality);
                 if (intMartialArts > 1)
@@ -12876,12 +12900,30 @@ namespace Chummer
                 }
 
                 // Check if the character's Essence is above 0.
-                decimal decEss = CharacterObject.Essence();
-                decimal decMinEss = CharacterObjectSettings.DontRoundEssenceInternally ? 0 : 10.0m.RaiseToPower(-CharacterObjectSettings.EssenceDecimals);
-                if (decEss < decMinEss && CharacterObject.ESS.MetatypeMaximum > 0)
+                if (CharacterObject.ESS.MetatypeMaximum > 0)
                 {
-                    blnValid = false;
-                    sbdMessage.Append(Environment.NewLine + '\t' + string.Format(GlobalSettings.CultureInfo, LanguageManager.GetString("Message_InvalidEssenceExcess"), decMinEss - decEss));
+                    decimal decEss = CharacterObject.Essence();
+                    decimal decExcessEss = 0.0m;
+                    // Need to split things up this way because without internal rounding, Essence can be as small as the player wants as long as it is positive
+                    // And getting the smallest positive number supported by the decimal type is way trickier than just checking if it's zero or negative
+                    if (CharacterObjectSettings.DontRoundEssenceInternally)
+                    {
+                        if (decEss < 0)
+                            decExcessEss = -decEss;
+                        else if (decEss == 0)
+                            decExcessEss = 10.0m.RaiseToPower(-CharacterObjectSettings.EssenceDecimals); // Hacky, but necessary so that the player knows they need to increase their ESS
+                    }
+                    else
+                    {
+                        decimal decMinEss = 10.0m.RaiseToPower(-CharacterObjectSettings.EssenceDecimals);
+                        if (decEss < decMinEss)
+                            decExcessEss = decMinEss - decEss;
+                    }
+                    if (decExcessEss > 0)
+                    {
+                        blnValid = false;
+                        sbdMessage.Append(Environment.NewLine + '\t' + string.Format(GlobalSettings.CultureInfo, LanguageManager.GetString("Message_InvalidEssenceExcess"), decExcessEss));
+                    }
                 }
 
                 // If the character has the Spells & Spirits Tab enabled, make sure a Tradition has been selected.
@@ -12901,7 +12943,7 @@ namespace Chummer
                         CharacterObject.PowerPointsTotal));
                 }
 
-                // If the character has the Technomencer Tab enabled, make sure a Stream has been selected.
+                // If the character has the Technomancer Tab enabled, make sure a Stream has been selected.
                 if (CharacterObject.TechnomancerEnabled && CharacterObject.MagicTradition.Type != TraditionType.RES)
                 {
                     blnValid = false;
@@ -12922,19 +12964,104 @@ namespace Chummer
                 }
 
                 // Check the character's equipment and make sure nothing goes over their set Maximum Availability.
-                bool blnRestrictedGearUsed = false;
-                string strRestrictedItem = string.Empty;
+                // Number of items over the specified Availability the character is allowed to have (typically from the Restricted Gear Quality).
+                Dictionary<int, int> dicRestrictedGearLimits = new Dictionary<int, int>();
+                if (ImprovementManager.ValueOf(CharacterObject, Improvement.ImprovementType.RestrictedGear) != 0)
+                {
+                    foreach (Improvement objImprovement in CharacterObject.Improvements.Where(
+                        x => x.ImproveType == Improvement.ImprovementType.RestrictedGear && x.Enabled))
+                    {
+                        int intLoopAvailability = objImprovement.Value.StandardRound();
+                        if (dicRestrictedGearLimits.ContainsKey(intLoopAvailability))
+                            dicRestrictedGearLimits[intLoopAvailability] += objImprovement.Rating;
+                        else
+                            dicRestrictedGearLimits.Add(intLoopAvailability, objImprovement.Rating);
+                    }
+                }
+
+                // Remove all Restricted Gear availabilities with non-positive counts
+                foreach(int intLoopAvailability in dicRestrictedGearLimits.Keys.ToList())
+                    if (dicRestrictedGearLimits.TryGetValue(intLoopAvailability, out int intLoopCount)
+                        && intLoopCount <= 0)
+                        dicRestrictedGearLimits.Remove(intLoopAvailability);
+                
+                StringBuilder sbdAvailItems = new StringBuilder();
+                StringBuilder sbdRestrictedItems = new StringBuilder();
+                int intRestrictedCount = 0;
+
                 // Gear Availability.
                 foreach (Gear objGear in CharacterObject.Gear)
                 {
-                    objGear.CheckRestrictedGear(blnRestrictedGearUsed, intRestrictedCount, strAvailItems, strRestrictedItem, out blnRestrictedGearUsed, out intRestrictedCount, out strAvailItems, out strRestrictedItem);
+                    objGear.CheckRestrictedGear(dicRestrictedGearLimits, sbdAvailItems, sbdRestrictedItems, ref intRestrictedCount);
                 }
 
                 // Cyberware Availability.
-                foreach (Cyberware objCyberware in CharacterObject.Cyberware.GetAllDescendants(x => x.Children))
+                foreach (Cyberware objCyberware in CharacterObject.Cyberware)
                 {
-                    objCyberware.CheckRestrictedGear(blnRestrictedGearUsed, intRestrictedCount, strAvailItems, strRestrictedItem, strCyberwareGrade, out blnRestrictedGearUsed, out intRestrictedCount, out strAvailItems,
-                        out strRestrictedItem, out strCyberwareGrade);
+                    objCyberware.CheckRestrictedGear(dicRestrictedGearLimits, sbdAvailItems, sbdRestrictedItems, ref intRestrictedCount);
+                }
+
+                // Armor Availability.
+                foreach (Armor objArmor in CharacterObject.Armor)
+                {
+                    objArmor.CheckRestrictedGear(dicRestrictedGearLimits, sbdAvailItems, sbdRestrictedItems, ref intRestrictedCount);
+                }
+
+                // Weapon Availability.
+                foreach (Weapon objWeapon in CharacterObject.Weapons)
+                {
+                    objWeapon.CheckRestrictedGear(dicRestrictedGearLimits, sbdAvailItems, sbdRestrictedItems, ref intRestrictedCount);
+                }
+
+                // Vehicle Availability.
+                foreach (Vehicle objVehicle in CharacterObject.Vehicles)
+                {
+                    objVehicle.CheckRestrictedGear(dicRestrictedGearLimits, sbdAvailItems, sbdRestrictedItems, ref intRestrictedCount);
+                }
+
+                // Make sure the character is not carrying more items over the allowed Avail than they are allowed.
+                if (intRestrictedCount > 0)
+                {
+                    blnValid = false;
+                    sbdMessage.Append(Environment.NewLine + '\t' + string.Format(
+                                          GlobalSettings.CultureInfo, LanguageManager.GetString("Message_InvalidAvail"),
+                                          intRestrictedCount,
+                                          CharacterObjectSettings.MaximumAvailability));
+                    sbdMessage.Append(sbdAvailItems);
+                    if (sbdRestrictedItems.Length > 0)
+                    {
+                        sbdMessage.Append(Environment.NewLine + string.Format(GlobalSettings.CultureInfo,
+                                                                              LanguageManager.GetString("Message_RestrictedGearUsed"),
+                                                                              sbdRestrictedItems.ToString()));
+                    }
+                }
+
+                // Check for any illegal cyberware grades
+
+                StringBuilder sbdIllegalCyberwareFromGrade = new StringBuilder();
+
+                foreach (Cyberware objCyberware in CharacterObject.Cyberware)
+                {
+                    objCyberware.CheckBannedGrades(sbdIllegalCyberwareFromGrade);
+                }
+
+                foreach (Vehicle objVehicle in CharacterObject.Vehicles)
+                {
+                    foreach (Cyberware objCyberware in objVehicle.Mods.SelectMany(objMod => objMod.Cyberware))
+                    {
+                        objCyberware.CheckBannedGrades(sbdIllegalCyberwareFromGrade);
+                    }
+
+                    foreach (Cyberware objCyberware in objVehicle.WeaponMounts.SelectMany(objMount => objMount.Mods.SelectMany(objMod => objMod.Cyberware)))
+                    {
+                        objCyberware.CheckBannedGrades(sbdIllegalCyberwareFromGrade);
+                    }
+                }
+
+                if (sbdIllegalCyberwareFromGrade.Length > 0)
+                {
+                    blnValid = false;
+                    sbdMessage.Append(Environment.NewLine + '\t' + LanguageManager.GetString("Message_InvalidCyberwareGrades") + sbdIllegalCyberwareFromGrade);
                 }
 
                 // Cyberware: Prototype Transhuman
@@ -12946,54 +13073,9 @@ namespace Chummer
                     {
                         blnValid = false;
                         sbdMessage.Append(Environment.NewLine + '\t' + string.Format(GlobalSettings.CultureInfo, LanguageManager.GetString("Message_OverPrototypeLimit"),
-                            decPrototypeTranshumanEssenceUsed.ToString(CharacterObjectSettings.EssenceFormat, GlobalSettings.CultureInfo),
-                            decPrototypeTranshumanEssenceMax.ToString(CharacterObjectSettings.EssenceFormat, GlobalSettings.CultureInfo)));
+                                              decPrototypeTranshumanEssenceUsed.ToString(CharacterObjectSettings.EssenceFormat, GlobalSettings.CultureInfo),
+                                              decPrototypeTranshumanEssenceMax.ToString(CharacterObjectSettings.EssenceFormat, GlobalSettings.CultureInfo)));
                     }
-                }
-
-                // Armor Availability.
-                foreach (Armor objArmor in CharacterObject.Armor)
-                {
-                    objArmor.CheckRestrictedGear(blnRestrictedGearUsed, intRestrictedCount, strAvailItems, strRestrictedItem, out blnRestrictedGearUsed, out intRestrictedCount, out strAvailItems, out strRestrictedItem);
-                }
-
-                // Weapon Availability.
-                foreach (Weapon objWeapon in CharacterObject.Weapons.GetAllDescendants(x => x.Children))
-                {
-                    objWeapon.CheckRestrictedGear(blnRestrictedGearUsed, intRestrictedCount, strAvailItems, strRestrictedItem, out blnRestrictedGearUsed, out intRestrictedCount, out strAvailItems, out strRestrictedItem);
-                }
-
-                // Vehicle Availability.
-                foreach (Vehicle objVehicle in CharacterObject.Vehicles)
-                {
-                    objVehicle.CheckRestrictedGear(blnRestrictedGearUsed, intRestrictedCount, strAvailItems, strRestrictedItem, strCyberwareGrade, out blnRestrictedGearUsed, out intRestrictedCount, out strAvailItems, out strRestrictedItem,
-                        out strCyberwareGrade);
-                }
-
-                // Make sure the character is not carrying more items over the allowed Avail than they are allowed.
-                if (intRestrictedCount > intRestrictedAllowed)
-                {
-                    blnValid = false;
-                    sbdMessage.Append(Environment.NewLine + '\t' + string.Format(GlobalSettings.CultureInfo, LanguageManager.GetString("Message_InvalidAvail")
-                        , intRestrictedCount - intRestrictedAllowed
-                        , CharacterObjectSettings.MaximumAvailability + strAvailItems));
-                    if (blnRestrictedGearUsed)
-                    {
-                        sbdMessage.Append(Environment.NewLine + '\t' + string.Format(GlobalSettings.CultureInfo, LanguageManager.GetString("Message_RestrictedGearUsed"),
-                            strRestrictedItem));
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(strExConItems))
-                {
-                    blnValid = false;
-                    sbdMessage.Append(Environment.NewLine + '\t' + LanguageManager.GetString("Message_InvalidExConWare") + strExConItems);
-                }
-
-                if (!string.IsNullOrWhiteSpace(strCyberwareGrade))
-                {
-                    blnValid = false;
-                    sbdMessage.Append(Environment.NewLine + '\t' + LanguageManager.GetString("Message_InvalidCyberwareGrades") + strCyberwareGrade);
                 }
 
                 // Check item Capacities if the option is enabled.
@@ -13281,7 +13363,7 @@ namespace Chummer
                     {
                         using (frmLoading frmProgressBar = frmChummerMain.CreateAndShowProgressBar())
                         {
-                            frmProgressBar.PerformStep(CharacterObject.CharacterName, true);
+                            frmProgressBar.PerformStep(CharacterObject.CharacterName, frmLoading.ProgressBarTextPatterns.Saving);
                             if (!CharacterObject.Save(strNewName))
                                 return false;
                         }
@@ -15428,6 +15510,12 @@ namespace Chummer
             objItem.DiscountCost = chkVehicleBlackMarketDiscount.Checked;
             IsCharacterUpdateRequested = true;
             IsDirty = true;
+        }
+
+        private void mnuFileExport_Click(object sender, EventArgs e)
+        {
+            using (frmExport frmExportCharacter = new frmExport(CharacterObject))
+                frmExportCharacter.ShowDialog(this);
         }
     }
 }

@@ -3192,7 +3192,10 @@
       <limit>3</limit>
       <nolevels />
       <bonus>
-        <restrictedgear>24</restrictedgear>
+        <restrictedgear>
+          <availability>24</availability>
+          <amount>1</amount>
+        </restrictedgear>
       </bonus>
       <source>RF</source>
       <page>149</page>
@@ -17413,7 +17416,8 @@
       <category>Positive</category>
       <contributetolimit>False</contributetolimit>
       <bonus>
-        <limitspellcategory />
+        <allowspellcategory>Rituals</allowspellcategory>
+        <limitspellcategory exclude="Rituals" />
         <skillgroupdisable>Conjuring</skillgroupdisable>
         <spellcategorydrain>
           <val>-2</val>
@@ -18828,7 +18832,7 @@
         <addgear>
           <name>Fake SIN</name>
           <category>ID/Credsticks</category>
-          <rating>4</rating>
+          <rating>3</rating>
           <children>
             <child>
               <name>Fake License</name>

@@ -166,7 +166,7 @@ namespace Chummer
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
             if (arrayIndex + Count >= array.Length)
-                throw new ArgumentOutOfRangeException();
+                throw new ArgumentOutOfRangeException(nameof(arrayIndex));
             for (int i = 0; i < Count; ++i)
                 array[i + arrayIndex] = this[i];
         }
@@ -174,7 +174,7 @@ namespace Chummer
         public void CopyTo(Tuple<TKey, TValue>[] array, int arrayIndex)
         {
             if (arrayIndex + Count >= array.Length)
-                throw new ArgumentOutOfRangeException();
+                throw new ArgumentOutOfRangeException(nameof(arrayIndex));
             for (int i = 0; i < Count; ++i)
                 array[i + arrayIndex] =
                     new Tuple<TKey, TValue>(_lstIndexes[i], _dicUnorderedData[_lstIndexes[i]]);
@@ -183,7 +183,7 @@ namespace Chummer
         public void CopyTo(Array array, int index)
         {
             if (index + Count >= array.Length)
-                throw new ArgumentOutOfRangeException();
+                throw new ArgumentOutOfRangeException(nameof(index));
             for (int i = 0; i < Count; ++i)
                 array.SetValue(this[i], i + index);
         }
@@ -318,7 +318,7 @@ namespace Chummer
                         return this[intKey];
 
                     default:
-                        throw new ArgumentException(nameof(key));
+                        throw new ArgumentException(null, nameof(key));
                 }
             }
             set
@@ -338,7 +338,7 @@ namespace Chummer
                         break;
 
                     default:
-                        throw new ArgumentException(nameof(value));
+                        throw new InvalidOperationException(nameof(value));
                 }
             }
         }
@@ -450,7 +450,7 @@ namespace Chummer
         public void Insert(int index, KeyValuePair<TKey, TValue> item)
         {
             if (_dicUnorderedData.ContainsKey(item.Key))
-                throw new ArgumentException(nameof(item));
+                throw new ArgumentException(null, nameof(item));
             _dicUnorderedData.Add(item.Key, item.Value);
             _lstIndexes.Insert(index, item.Key);
         }
@@ -460,7 +460,7 @@ namespace Chummer
             if (item == null)
                 throw new ArgumentNullException(nameof(item));
             if (_dicUnorderedData.ContainsKey(item.Item1))
-                throw new ArgumentException(nameof(item));
+                throw new ArgumentException(null, nameof(item));
             _dicUnorderedData.Add(item.Item1, item.Item2);
             _lstIndexes.Insert(index, item.Item1);
         }

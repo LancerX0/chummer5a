@@ -5024,7 +5024,7 @@ namespace Chummer
 
                             case ContactType.Enemy:
                                 {
-                                    if (panEnemies == null)
+                                    if (panEnemies == null || !CharacterObjectSettings.EnableEnemyTracking)
                                         break;
                                     ContactControl objContactControl = new ContactControl(objContact);
                                     // Attach an EventHandler for the ConnectionRatingChanged, LoyaltyRatingChanged, DeleteContact, FileNameChanged Events and OtherCostChanged
@@ -5082,7 +5082,7 @@ namespace Chummer
 
                                         case ContactType.Enemy:
                                             {
-                                                if (panEnemies == null)
+                                                if (panEnemies == null || !CharacterObjectSettings.EnableEnemyTracking)
                                                     break;
                                                 ContactControl objContactControl = new ContactControl(objLoopContact);
                                                 // Attach an EventHandler for the ConnectionRatingChanged, LoyaltyRatingChanged, DeleteContact, FileNameChanged Events and OtherCostChanged
@@ -5260,7 +5260,7 @@ namespace Chummer
 
                                         case ContactType.Enemy:
                                             {
-                                                if (panEnemies == null)
+                                                if (panEnemies == null || !CharacterObjectSettings.EnableEnemyTracking)
                                                     break;
                                                 ContactControl objContactControl = new ContactControl(objLoopContact);
                                                 // Attach an EventHandler for the ConnectionRatingChanged, LoyaltyRatingChanged, DeleteContact, FileNameChanged Events and OtherCostChanged
@@ -6569,37 +6569,37 @@ namespace Chummer
         public bool IsRefreshing
         {
             get => _blnIsRefreshing;
-            set
+            set => _blnIsRefreshing = value;
+            /*
             {
-                //if (_blnIsRefreshing != value)
+                if (_blnIsRefreshing != value)
                 {
                     _blnIsRefreshing = value;
-                    /*
                     if (value)
                         SuspendLayout();
                     else if (!IsLoading)
                         ResumeLayout();
-                    */
                 }
             }
+            */
         }
 
         public bool IsLoading
         {
             get => _blnLoading;
-            set
+            set => _blnLoading = value;
+            /*
             {
-                //if (_blnLoading != value)
+                if (_blnLoading != value)
                 {
                     _blnLoading = value;
-                    /*
                     if (value)
                         SuspendLayout();
                     else if (!IsRefreshing)
                         ResumeLayout();
-                    */
                 }
             }
+            */
         }
 
         public void MakeDirtyWithCharacterUpdate(object sender, EventArgs e)
@@ -6685,7 +6685,7 @@ namespace Chummer
                 {
                     using (frmLoading frmProgressBar = frmChummerMain.CreateAndShowProgressBar())
                     {
-                        frmProgressBar.PerformStep(_objCharacter.CharacterName, true);
+                        frmProgressBar.PerformStep(_objCharacter.CharacterName, frmLoading.ProgressBarTextPatterns.Saving);
                         if (!_objCharacter.Save())
                             return false;
                         GlobalSettings.MostRecentlyUsedCharacters.Insert(0, _objCharacter.FileName);

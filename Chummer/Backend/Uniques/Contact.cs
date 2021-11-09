@@ -133,14 +133,12 @@ namespace Chummer
                 || lstNamesOfChangedProperties.Contains(nameof(Free))
                 || lstNamesOfChangedProperties.Contains(nameof(ContactPoints)))
             {
-                if (!IsNotEnemy || lstNamesOfChangedProperties.Contains(nameof(IsNotEnemy)))
+                if (IsEnemy || lstNamesOfChangedProperties.Contains(nameof(IsEnemy)))
                 {
                     _objCharacter.OnPropertyChanged(nameof(Character.EnemyKarma));
                 }
-                if ((IsNotEnemy
-                     || lstNamesOfChangedProperties.Contains(nameof(IsNotEnemy)))
-                    && (IsGroup
-                        || lstNamesOfChangedProperties.Contains(nameof(IsGroup))))
+                if ((!IsEnemy || lstNamesOfChangedProperties.Contains(nameof(IsEnemy)))
+                    && (IsGroup || lstNamesOfChangedProperties.Contains(nameof(IsGroup))))
                     _objCharacter.OnPropertyChanged(nameof(Character.PositiveQualityKarmaTotal));
             }
         }
@@ -175,7 +173,7 @@ namespace Chummer
                     ),
                     new DependencyGraphNode<string, Contact>(nameof(MainMugshotIndex))
                 ),
-                new DependencyGraphNode<string, Contact>(nameof(IsNotEnemy),
+                new DependencyGraphNode<string, Contact>(nameof(IsEnemy),
                     new DependencyGraphNode<string, Contact>(nameof(EntityType))
                 ),
                 new DependencyGraphNode<string, Contact>(nameof(NotReadOnly),
@@ -348,7 +346,7 @@ namespace Chummer
             objNode.TryGetStringFieldQuickly("file", ref _strFileName);
             objNode.TryGetStringFieldQuickly("notes", ref _strNotes);
 
-            String sNotesColor = ColorTranslator.ToHtml(ColorManager.HasNotesColor);
+            string sNotesColor = ColorTranslator.ToHtml(ColorManager.HasNotesColor);
             objNode.TryGetStringFieldQuickly("notesColor", ref sNotesColor);
             _colNotes = ColorTranslator.FromHtml(sNotesColor);
 
@@ -839,7 +837,7 @@ namespace Chummer
             }
         }
 
-        public bool IsNotEnemy => EntityType != ContactType.Enemy;
+        public bool IsEnemy => EntityType == ContactType.Enemy;
 
         /// <summary>
         /// Name of the save file for this Contact.

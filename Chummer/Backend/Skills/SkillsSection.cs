@@ -498,7 +498,7 @@ namespace Chummer.Backend.Skills
                     XmlNode objXmlSkillNode = skillsDoc.SelectSingleNode("/chummer/skills/skill[name = " + skillId.CleanXPath() + ']');
                     if (objXmlSkillNode != null)
                     {
-                        Skill objSkill = Skill.FromData(objXmlSkillNode, _objCharacter);
+                        Skill objSkill = Skill.FromData(objXmlSkillNode, _objCharacter, false);
                         Skills.Add(objSkill);
                     }
                 }
@@ -1114,7 +1114,8 @@ namespace Chummer.Backend.Skills
             //TODO less retarded way please
             // Load the Skills information.
             // Populate the Skills list.
-            using (XmlNodeList xmlSkillList = _objCharacter.LoadData("skills.xml")
+            XmlDocument xmlSkillsDocument = _objCharacter.LoadData("skills.xml");
+            using (XmlNodeList xmlSkillList = xmlSkillsDocument
                 .SelectNodes(string.Format(GlobalSettings.InvariantCultureInfo, "/chummer/skills/skill[not(exotic) and ({0}){1}]",
                     _objCharacter.Settings.BookXPath(), SkillFilter(filter, strName))))
             {
@@ -1138,12 +1139,22 @@ namespace Chummer.Backend.Skills
                             }
                             else
                             {
-                                dicSkills.Add(objSkillItem, Skill.FromData(xmlSkill, _objCharacter));
+                                bool blnIsKnowledgeSkill
+                                    = xmlSkillsDocument
+                                      .SelectSingleNode("/chummer/categories/category[. = "
+                                                        + xmlSkill["category"]?.InnerText.CleanXPath() + "]/@type")
+                                      ?.Value != "active";
+                                dicSkills.Add(objSkillItem, Skill.FromData(xmlSkill, _objCharacter, blnIsKnowledgeSkill));
                             }
                         }
                         else
                         {
-                            Skill objSkill = Skill.FromData(xmlSkill, _objCharacter);
+                            bool blnIsKnowledgeSkill
+                                = xmlSkillsDocument
+                                  .SelectSingleNode("/chummer/categories/category[. = "
+                                                    + xmlSkill["category"]?.InnerText.CleanXPath() + "]/@type")?.Value
+                                  != "active";
+                            Skill objSkill = Skill.FromData(xmlSkill, _objCharacter, blnIsKnowledgeSkill);
                             dicSkills.Add(objSkillItem, objSkill);
                         }
                     }
@@ -1310,5 +1321,117 @@ namespace Chummer.Backend.Skills
                 objSkill.Print(objWriter, objCulture, strLanguageToPrint);
             }
         }
+        #region XPath Processing
+        /// <summary>
+        /// Replaces substring in the form of {Skill} with the total dicepool of the skill.
+        /// </summary>
+        /// <param name="strInput">Stringbuilder object that contains the input.</param>
+        /// <param name="dicValueOverrides">Alternative dictionary to use for value lookup instead of SkillsSection.GetActiveSkill.</param>
+        public string ProcessSkillsInXPath(string strInput, IReadOnlyDictionary<string, int> dicValueOverrides = null)
+        {
+            return string.IsNullOrEmpty(strInput)
+                ? strInput
+                : ProcessSkillsInXPathForTooltip(strInput, blnShowValues: false, dicValueOverrides: dicValueOverrides);
+        }
+
+        /// <summary>
+        /// Replaces stringbuilder content in the form of {Skill} with the total dicepool of the skill.
+        /// </summary>
+        /// <param name="sbdInput">Stringbuilder object that contains the input.</param>
+        /// <param name="strOriginal">Original text that will be used in the final Stringbuilder. Replaces stringbuilder input without replacing the object.</param>
+        /// <param name="dicValueOverrides">Alternative dictionary to use for value lookup instead of SkillsSection.GetActiveSkill.</param>
+        public void ProcessSkillsInXPath(StringBuilder sbdInput, string strOriginal = "", IReadOnlyDictionary<string, int> dicValueOverrides = null)
+        {
+            if (sbdInput == null || sbdInput.Length <= 0)
+                return;
+            ProcessSkillsInXPathForTooltip(sbdInput, strOriginal, blnShowValues: false,
+                dicValueOverrides: dicValueOverrides);
+        }
+
+        /// <summary>
+        /// Replaces substring in the form of {Skill} with 'Skill (Pool)'. Intended to be used by tooltips and similar. 
+        /// </summary>
+        /// <param name="strInput">Stringbuilder object that contains the input.</param>
+        /// <param name="objCultureInfo">Culture type used by the language. Defaults to null, which is then system defaults.</param>
+        /// <param name="strLanguage">Language to use for displayname translation.</param>
+        /// <param name="blnShowValues">Whether to include the dicepool value in the return string.</param>
+        /// <param name="dicValueOverrides">Alternative dictionary to use for value lookup instead of SkillsSection.GetActiveSkill.</param>
+        public string ProcessSkillsInXPathForTooltip(string strInput, CultureInfo objCultureInfo = null, string strLanguage = "", bool blnShowValues = true, IReadOnlyDictionary<string, int> dicValueOverrides = null)
+        {
+            if (string.IsNullOrEmpty(strInput))
+                return strInput;
+            if (objCultureInfo == null)
+                objCultureInfo = GlobalSettings.CultureInfo;
+            if (string.IsNullOrEmpty(strLanguage))
+                strLanguage = GlobalSettings.Language;
+            string strReturn = strInput;
+            string strFormat = blnShowValues ? LanguageManager.GetString("String_Space", strLanguage) + "({0})" : string.Empty;
+            foreach (string strSkillKey in Skills.Select(i => i.DictionaryKey))
+            {
+                if (blnShowValues)
+                    strReturn = strReturn.CheapReplace('{' + strSkillKey + '}',
+                                                       () =>
+                                                       {
+                                                           Skill objLoopSkill = GetActiveSkill(strSkillKey);
+                                                           return objLoopSkill.DisplayName(strLanguage)
+                                                                  + string.Format(
+                                                                      objCultureInfo, strFormat,
+                                                                      dicValueOverrides?.ContainsKey(strSkillKey)
+                                                                      == true
+                                                                          ? dicValueOverrides[strSkillKey]
+                                                                          : objLoopSkill.PoolOtherAttribute(
+                                                                              objLoopSkill.Attribute,
+                                                                              intAttributeOverrideValue: 0)); // We explicitly want to override the attribute value with 0 because we're just fetching the pure skill pool
+                                                       });
+                else
+                    strReturn = strReturn.CheapReplace('{' + strSkillKey + '}',
+                                                       () => GetActiveSkill(strSkillKey).DisplayName(strLanguage));
+            }
+            return strReturn;
+        }
+
+        /// <summary>
+        /// Replaces Stringbuilder content in the form of {Active Skill Name} with 'Active Skill Name (Pool)', ie {Athletics} becomes 'Athletics (1)'. Intended to be used by tooltips and similar. 
+        /// </summary>
+        /// <param name="sbdInput">Stringbuilder object that contains the input.</param>
+        /// <param name="strOriginal">Original text that will be used in the final Stringbuilder. Replaces stringbuilder input without replacing the object.</param>
+        /// <param name="objCultureInfo">Culture type used by the language. Defaults to null, which is then system defaults.</param>
+        /// <param name="strLanguage">Language to use for displayname translation.</param>
+        /// <param name="blnShowValues">Whether to include the dicepool value in the return string.</param>
+        /// <param name="dicValueOverrides">Alternative dictionary to use for value lookup instead of SkillsSection.GetActiveSkill.</param>
+        public void ProcessSkillsInXPathForTooltip(StringBuilder sbdInput, string strOriginal = "", CultureInfo objCultureInfo = null, string strLanguage = "", bool blnShowValues = true, IReadOnlyDictionary<string, int> dicValueOverrides = null)
+        {
+            if (sbdInput == null || sbdInput.Length <= 0)
+                return;
+            if (string.IsNullOrEmpty(strOriginal))
+                strOriginal = sbdInput.ToString();
+            if (objCultureInfo == null)
+                objCultureInfo = GlobalSettings.CultureInfo;
+            if (string.IsNullOrEmpty(strLanguage))
+                strLanguage = GlobalSettings.Language;
+            string strFormat = blnShowValues ? LanguageManager.GetString("String_Space", strLanguage) + "({0})" : string.Empty;
+            foreach (string strSkillKey in Skills.Select(i => i.DictionaryKey))
+            {
+                if (blnShowValues)
+                    sbdInput.CheapReplace(strOriginal, '{' + strSkillKey + '}',
+                                          () =>
+                                          {
+                                              Skill objLoopSkill = GetActiveSkill(strSkillKey);
+                                              return objLoopSkill.DisplayName(strLanguage)
+                                                     + string.Format(
+                                                         objCultureInfo, strFormat,
+                                                         dicValueOverrides?.ContainsKey(strSkillKey)
+                                                         == true
+                                                             ? dicValueOverrides[strSkillKey]
+                                                             : objLoopSkill.PoolOtherAttribute(
+                                                                 objLoopSkill.Attribute,
+                                                                 intAttributeOverrideValue: 0)); // We explicitly want to override the attribute value with 0 because we're just fetching the pure skill pool
+                                          });
+                else
+                    sbdInput.CheapReplace(strOriginal, '{' + strSkillKey + '}',
+                                          () => GetActiveSkill(strSkillKey).DisplayName(strLanguage));
+            }
+        }
+        #endregion
     }
 }

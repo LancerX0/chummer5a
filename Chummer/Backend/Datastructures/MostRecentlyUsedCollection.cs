@@ -17,12 +17,13 @@
  *  https://github.com/chummer5a/chummer5a
  */
 
+using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 
 namespace Chummer
 {
-    public class MostRecentlyUsedCollection<T> : ObservableCollectionWithMaxSize<T>
+    public class MostRecentlyUsedCollection<T> : ThreadSafeObservableCollectionWithMaxSize<T>
     {
         public MostRecentlyUsedCollection(int intMaxSize) : base(intMaxSize)
         {
@@ -40,33 +41,45 @@ namespace Chummer
 
         protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
         {
-            if (_blnSkipCollectionChanged)
-                return;
-            if (e.Action == NotifyCollectionChangedAction.Reset)
+            using (new EnterUpgradeableReadLock(LockerObject))
             {
-                _blnSkipCollectionChanged = true;
-                // Remove all duplicate entries
-                for (int intLastIndex = Count - 1; intLastIndex >= 0; --intLastIndex)
+                if (_blnSkipCollectionChanged)
+                    return;
+                if (e.Action == NotifyCollectionChangedAction.Reset)
                 {
-                    T objItem = this[intLastIndex];
-                    for (int intIndex = IndexOf(objItem); intIndex != intLastIndex; intIndex = IndexOf(objItem))
+                    _blnSkipCollectionChanged = true;
+                    using (new EnterWriteLock(LockerObject))
                     {
-                        RemoveAt(intIndex);
-                        --intLastIndex;
+                        // Remove all duplicate entries
+                        for (int intLastIndex = Count - 1; intLastIndex >= 0; --intLastIndex)
+                        {
+                            T objItem = this[intLastIndex];
+                            for (int intIndex = IndexOf(objItem); intIndex != intLastIndex; intIndex = IndexOf(objItem))
+                            {
+                                RemoveAt(intIndex);
+                                --intLastIndex;
+                            }
+                        }
                     }
+                    _blnSkipCollectionChanged = false;
                 }
-                _blnSkipCollectionChanged = false;
             }
             base.OnCollectionChanged(e);
         }
 
         protected override void InsertItem(int index, T item)
         {
-            int intExistingIndex = IndexOf(item);
-            if (intExistingIndex == -1)
-                base.InsertItem(index, item);
-            else
-                MoveItem(intExistingIndex, index);
+            using (new EnterUpgradeableReadLock(LockerObject))
+            {
+                int intExistingIndex = IndexOf(item);
+                using (new EnterWriteLock(LockerObject))
+                {
+                    if (intExistingIndex == -1)
+                        base.InsertItem(index, item);
+                    else
+                        MoveItem(intExistingIndex, Math.Min(index, Count - 1));
+                }
+            }
         }
     }
 }

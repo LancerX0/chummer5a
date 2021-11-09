@@ -26,7 +26,6 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -50,7 +49,6 @@ namespace Chummer
         private frmUpdate _frmUpdate;
         private readonly ThreadSafeObservableCollection<Character> _lstCharacters = new ThreadSafeObservableCollection<Character>();
         private readonly ObservableCollection<CharacterShared> _lstOpenCharacterForms = new ObservableCollection<CharacterShared>();
-        private readonly Version _objCurrentVersion = Assembly.GetExecutingAssembly().GetName().Version;
         private readonly string _strCurrentVersion;
         private Chummy _mascotChummy;
 
@@ -77,7 +75,7 @@ namespace Chummer
             this.UpdateLightDarkMode();
             this.TranslateWinForm();
             _strCurrentVersion =
-                string.Format(GlobalSettings.InvariantCultureInfo, "{0}.{1}.{2}", _objCurrentVersion.Major, _objCurrentVersion.Minor, _objCurrentVersion.Build);
+                string.Format(GlobalSettings.InvariantCultureInfo, "{0}.{1}.{2}", Program.CurrentVersion.Major, Program.CurrentVersion.Minor, Program.CurrentVersion.Build);
 
             //lets write that in separate lines to see where the exception is thrown
             if (!GlobalSettings.HideMasterIndex || isUnitTest)
@@ -197,24 +195,6 @@ namespace Chummer
                         Task objCharacterLoadingTask = null;
                         using (_frmProgressBar = CreateAndShowProgressBar(Text, (GlobalSettings.AllowEasterEggs ? 4 : 3) + s_PreloadFileNames.Count))
                         {
-#if DEBUG
-                            if (!Utils.IsUnitTest && GlobalSettings.ShowCharacterCustomDataWarning &&
-                                CurrentVersion.Minor < 215)
-#else
-                            if (!Utils.IsUnitTest && GlobalSettings.ShowCharacterCustomDataWarning && CurrentVersion.Build > 0 && CurrentVersion.Minor < 215)
-#endif
-                            {
-                                if (ShowMessageBox(LanguageManager.GetString("Message_CharacterCustomDataWarning"),
-                                    LanguageManager.GetString("MessageTitle_CharacterCustomDataWarning"),
-                                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                                {
-                                    Application.Exit();
-                                    return;
-                                }
-
-                                GlobalSettings.ShowCharacterCustomDataWarning = false;
-                            }
-
                             // Attempt to cache all XML files that are used the most.
                             using (_ = Timekeeper.StartSyncron("cache_load", opFrmChummerMain))
                             {
@@ -224,7 +204,7 @@ namespace Chummer
                                     if (!GlobalSettings.Language.Equals(GlobalSettings.DefaultLanguage, StringComparison.OrdinalIgnoreCase))
                                         XmlManager.Load(x, null, GlobalSettings.DefaultLanguage);
                                     XmlManager.Load(x);
-                                    _frmProgressBar.PerformStep(Application.ProductName);
+                                    _frmProgressBar.PerformStep(Application.ProductName, frmLoading.ProgressBarTextPatterns.Initializing);
                                 })));
                                 //Timekeeper.Finish("cache_load");
                             }
@@ -243,9 +223,9 @@ namespace Chummer
 
                                 if (Directory.Exists(Utils.GetAutosavesFolderPath))
                                 {
+                                    // Always process newest autosave if all MRUs are empty
                                     bool blnAnyAutosaveInMru = GlobalSettings.MostRecentlyUsedCharacters.Count == 0 &&
-                                                               GlobalSettings.FavoritedCharacters.Count ==
-                                                               0; // Always process newest autosave if all MRUs are empty
+                                                               GlobalSettings.FavoriteCharacters.Count == 0; 
                                     FileInfo objMostRecentAutosave = null;
                                     List<string> lstOldAutosaves = new List<string>();
                                     DateTime objOldAutosaveTimeThreshold =
@@ -273,7 +253,7 @@ namespace Chummer
                                             objMostRecentAutosave = objAutosave;
                                         if (GlobalSettings.MostRecentlyUsedCharacters.Any(x =>
                                                 Path.GetFileName(x) == objAutosave.Name) ||
-                                            GlobalSettings.FavoritedCharacters.Any(x =>
+                                            GlobalSettings.FavoriteCharacters.Any(x =>
                                                 Path.GetFileName(x) == objAutosave.Name))
                                             blnAnyAutosaveInMru = true;
                                         else if (objAutosave != objMostRecentAutosave &&
@@ -289,7 +269,7 @@ namespace Chummer
                                             !setFilesToLoad.Contains(objMostRecentAutosave.FullName) &&
                                             GlobalSettings.MostRecentlyUsedCharacters.All(x =>
                                                 Path.GetFileName(x) != objMostRecentAutosave.Name) &&
-                                            GlobalSettings.FavoritedCharacters.All(x =>
+                                            GlobalSettings.FavoriteCharacters.All(x =>
                                                 Path.GetFileName(x) != objMostRecentAutosave.Name) && ShowMessageBox(
                                                 string.Format(GlobalSettings.CultureInfo,
                                                     LanguageManager.GetString("Message_PossibleCrashAutosaveFound"),
@@ -458,7 +438,7 @@ namespace Chummer
                     {
                         // Need a full refresh because the recents list in the character roster also shows open characters that are not in the most recently used list because of it being too full
                         await CharacterRoster.RefreshMruLists(e.OldItems.Cast<CharacterShared>().Any(objClosedForm =>
-                            GlobalSettings.FavoritedCharacters.Contains(objClosedForm.CharacterObject.FileName))
+                            GlobalSettings.FavoriteCharacters.Contains(objClosedForm.CharacterObject.FileName))
                             ? "stickymru"
                             : "mru");
                     }
@@ -469,7 +449,7 @@ namespace Chummer
                         // Need a full refresh because the recents list in the character roster also shows open characters that are not in the most recently used list because of it being too full
                         await CharacterRoster.RefreshMruLists(e.OldItems.Cast<CharacterShared>()
                             .Concat(e.NewItems.Cast<CharacterShared>()).Any(objClosedForm =>
-                                GlobalSettings.FavoritedCharacters.Contains(objClosedForm.CharacterObject.FileName))
+                                GlobalSettings.FavoriteCharacters.Contains(objClosedForm.CharacterObject.FileName))
                             ? "stickymru"
                             : "mru");
                     }
@@ -826,7 +806,7 @@ namespace Chummer
                 return;
             string strFileName = ((ToolStripMenuItem)sender).Tag as string;
             if (!string.IsNullOrEmpty(strFileName))
-                GlobalSettings.FavoritedCharacters.Add(strFileName);
+                GlobalSettings.FavoriteCharacters.AddWithSort(strFileName);
         }
 
         private void mnuStickyMRU_MouseDown(object sender, MouseEventArgs e)
@@ -836,7 +816,7 @@ namespace Chummer
             string strFileName = ((ToolStripMenuItem)sender).Tag as string;
             if (!string.IsNullOrEmpty(strFileName))
             {
-                GlobalSettings.FavoritedCharacters.Remove(strFileName);
+                GlobalSettings.FavoriteCharacters.Remove(strFileName);
                 GlobalSettings.MostRecentlyUsedCharacters.Insert(0, strFileName);
             }
         }
@@ -1589,7 +1569,7 @@ namespace Chummer
         public void PopulateMruToolstripMenu(object sender, TextEventArgs e)
         {
             SuspendLayout();
-            mnuFileMRUSeparator.Visible = GlobalSettings.FavoritedCharacters.Count > 0
+            mnuFileMRUSeparator.Visible = GlobalSettings.FavoriteCharacters.Count > 0
                                           || GlobalSettings.MostRecentlyUsedCharacters.Count > 0;
 
             if (e?.Text != "mru")
@@ -1643,10 +1623,10 @@ namespace Chummer
                             continue;
                     }
 
-                    if (i < GlobalSettings.FavoritedCharacters.Count)
+                    if (i < GlobalSettings.FavoriteCharacters.Count)
                     {
-                        objItem.Text = GlobalSettings.FavoritedCharacters[i];
-                        objItem.Tag = GlobalSettings.FavoritedCharacters[i];
+                        objItem.Text = GlobalSettings.FavoriteCharacters[i];
+                        objItem.Tag = GlobalSettings.FavoriteCharacters[i];
                         objItem.Visible = true;
                     }
                     else
@@ -1675,7 +1655,7 @@ namespace Chummer
                     i >= GlobalSettings.MostRecentlyUsedCharacters.Count)
                     continue;
                 string strFile = GlobalSettings.MostRecentlyUsedCharacters[i];
-                if (GlobalSettings.FavoritedCharacters.Contains(strFile))
+                if (GlobalSettings.FavoriteCharacters.Contains(strFile))
                     continue;
                 ToolStripMenuItem objItem;
                 switch (i2)
@@ -1799,9 +1779,9 @@ namespace Chummer
 
                         if (Directory.Exists(Utils.GetAutosavesFolderPath))
                         {
+                            // Always process newest autosave if all MRUs are empty
                             bool blnAnyAutosaveInMru = GlobalSettings.MostRecentlyUsedCharacters.Count == 0 &&
-                                                       GlobalSettings.FavoritedCharacters.Count ==
-                                                       0; // Always process newest autosave if all MRUs are empty
+                                                       GlobalSettings.FavoriteCharacters.Count == 0;
                             FileInfo objMostRecentAutosave = null;
                             foreach (string strAutosave in Directory.EnumerateFiles(
                                 Utils.GetAutosavesFolderPath,
@@ -1826,27 +1806,28 @@ namespace Chummer
                                     objMostRecentAutosave = objAutosave;
                                 if (GlobalSettings.MostRecentlyUsedCharacters.Any(x =>
                                         Path.GetFileName(x) == objAutosave.Name) ||
-                                    GlobalSettings.FavoritedCharacters.Any(x =>
+                                    GlobalSettings.FavoriteCharacters.Any(x =>
                                         Path.GetFileName(x) == objAutosave.Name))
                                     blnAnyAutosaveInMru = true;
                             }
 
-                            if (objMostRecentAutosave != null)
+                            // Might have had a crash for an unsaved character, so prompt if we want to load them
+                            if (objMostRecentAutosave != null
+                                && blnAnyAutosaveInMru
+                                && !setFilesToLoad.Contains(objMostRecentAutosave.FullName)
+                                && GlobalSettings.MostRecentlyUsedCharacters.All(
+                                    x => Path.GetFileName(x) != objMostRecentAutosave.Name)
+                                && GlobalSettings.FavoriteCharacters.All(
+                                    x => Path.GetFileName(x) != objMostRecentAutosave.Name)
+                                && ShowMessageBox(string.Format(GlobalSettings.CultureInfo,
+                                                                LanguageManager.GetString(
+                                                                    "Message_PossibleCrashAutosaveFound"),
+                                                                objMostRecentAutosave.Name,
+                                                                objMostRecentAutosave.LastWriteTimeUtc.ToLocalTime()),
+                                                  LanguageManager.GetString("MessageTitle_AutosaveFound"),
+                                                  MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                             {
-                                // Might have had a crash for an unsaved character, so prompt if we want to load them
-                                if (blnAnyAutosaveInMru &&
-                                    !setFilesToLoad.Contains(objMostRecentAutosave.FullName) &&
-                                    GlobalSettings.MostRecentlyUsedCharacters.All(x =>
-                                        Path.GetFileName(x) != objMostRecentAutosave.Name) &&
-                                    GlobalSettings.FavoritedCharacters.All(x =>
-                                        Path.GetFileName(x) != objMostRecentAutosave.Name) && ShowMessageBox(
-                                        string.Format(GlobalSettings.CultureInfo,
-                                            LanguageManager.GetString("Message_PossibleCrashAutosaveFound"),
-                                            objMostRecentAutosave.Name,
-                                            objMostRecentAutosave.LastWriteTimeUtc.ToLocalTime()),
-                                        LanguageManager.GetString("MessageTitle_AutosaveFound"),
-                                        MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                                    setFilesToLoad.Add(objMostRecentAutosave.FullName);
+                                setFilesToLoad.Add(objMostRecentAutosave.FullName);
                             }
                         }
 
@@ -1983,8 +1964,6 @@ namespace Chummer
         public ThreadSafeObservableCollection<Character> OpenCharacters => _lstCharacters;
 
         public ObservableCollection<CharacterShared> OpenCharacterForms => _lstOpenCharacterForms;
-
-        public Version CurrentVersion => _objCurrentVersion;
 
         /// <summary>
         /// Set to True at the end of the OnLoad method. Useful for unit testing because the load method is executed asynchronously, so form might end up getting closed before it fully loads.

@@ -31,7 +31,6 @@ using System.Xml;
 using System.Xml.XPath;
 using Chummer.Backend.Attributes;
 using NLog;
-using RtfPipe.Tokens;
 using Version = System.Version;
 
 namespace Chummer.Backend.Equipment
@@ -521,7 +520,7 @@ namespace Chummer.Backend.Equipment
             if (!objXmlCyberware.TryGetMultiLineStringFieldQuickly("altnotes", ref _strNotes))
                 objXmlCyberware.TryGetMultiLineStringFieldQuickly("notes", ref _strNotes);
 
-            String sNotesColor = ColorTranslator.ToHtml(ColorManager.HasNotesColor);
+            string sNotesColor = ColorTranslator.ToHtml(ColorManager.HasNotesColor);
             objXmlCyberware.TryGetStringFieldQuickly("notesColor", ref sNotesColor);
             _colNotes = ColorTranslator.FromHtml(sNotesColor);
 
@@ -720,37 +719,46 @@ namespace Chummer.Backend.Equipment
                 }
             }
 
-            if (Parent?.WeaponID != null)
+            string strWeaponId = Parent?.WeaponID;
+            if (!string.IsNullOrEmpty(strWeaponId) && strWeaponId != Guid.Empty.ToString())
             {
                 Weapon objWeapon = ParentVehicle != null
-                    ? ParentVehicle.Weapons.FindById(Parent.WeaponID)
-                    : _objCharacter.Weapons.FindById(Parent?.WeaponID);
-                
-                foreach (XmlNode objXml in objXmlCyberware.SelectNodes("addparentweaponaccessory"))
+                    ? ParentVehicle.Weapons.FindById(strWeaponId)
+                    : _objCharacter.Weapons.FindById(strWeaponId);
+
+                if (objWeapon != null)
                 {
-                    string strLoopID = objXml.InnerText;
-                    XmlNode objXmlAccessory = strLoopID.IsGuid()
-                        ? objXmlWeaponDocument.SelectSingleNode("/chummer/accessories/accessory[id = " + strLoopID.CleanXPath() + "]")
-                        : objXmlWeaponDocument.SelectSingleNode("/chummer/accessories/accessory[name = " + strLoopID.CleanXPath() + "]");
-
-                    if (objXmlAccessory == null) continue;
-                    WeaponAccessory objGearWeapon = new WeaponAccessory(_objCharacter);
-                    int intAddWeaponRating = 0;
-                    string strLoopRating = objXml.Attributes["rating"]?.InnerText;
-                    if (!string.IsNullOrEmpty(strLoopRating))
+                    foreach (XmlNode objXml in objXmlCyberware.SelectNodes("addparentweaponaccessory"))
                     {
-                        strLoopRating = strLoopRating.CheapReplace("{Rating}",
-                            () => Rating.ToString(GlobalSettings.InvariantCultureInfo));
-                        int.TryParse(strLoopRating, NumberStyles.Any, GlobalSettings.InvariantCultureInfo, out intAddWeaponRating);
+                        string strLoopID = objXml.InnerText;
+                        XmlNode objXmlAccessory = strLoopID.IsGuid()
+                            ? objXmlWeaponDocument.SelectSingleNode(
+                                "/chummer/accessories/accessory[id = " + strLoopID.CleanXPath() + "]")
+                            : objXmlWeaponDocument.SelectSingleNode(
+                                "/chummer/accessories/accessory[name = " + strLoopID.CleanXPath() + "]");
+
+                        if (objXmlAccessory == null) continue;
+                        WeaponAccessory objGearWeapon = new WeaponAccessory(_objCharacter);
+                        int intAddWeaponRating = 0;
+                        string strLoopRating = objXml.Attributes["rating"]?.InnerText;
+                        if (!string.IsNullOrEmpty(strLoopRating))
+                        {
+                            strLoopRating = strLoopRating.CheapReplace("{Rating}",
+                                                                       () => Rating.ToString(
+                                                                           GlobalSettings.InvariantCultureInfo));
+                            int.TryParse(strLoopRating, NumberStyles.Any, GlobalSettings.InvariantCultureInfo,
+                                         out intAddWeaponRating);
+                        }
+
+                        objGearWeapon.Create(objXmlAccessory, new Tuple<string, string>("", ""), intAddWeaponRating,
+                                             true);
+                        objGearWeapon.Cost = "0";
+                        objGearWeapon.ParentID = InternalId;
+                        objGearWeapon.Parent = objWeapon;
+
+                        if (Guid.TryParse(objGearWeapon.InternalId, out _guiWeaponAccessoryID))
+                            objWeapon.WeaponAccessories.Add(objGearWeapon);
                     }
-
-                    objGearWeapon.Create(objXmlAccessory, new Tuple<string, string>("", ""), intAddWeaponRating, true);
-                    objGearWeapon.Cost = "0";
-                    objGearWeapon.ParentID = InternalId;
-                    objGearWeapon.Parent = objWeapon;
-
-                    if (Guid.TryParse(objGearWeapon.InternalId, out _guiWeaponAccessoryID))
-                        objWeapon.WeaponAccessories.Add(objGearWeapon);
                 }
             }
 
@@ -1489,7 +1497,7 @@ namespace Chummer.Backend.Equipment
 
             objNode.TryGetStringFieldQuickly("notes", ref _strNotes);
 
-            String sNotesColor = ColorTranslator.ToHtml(ColorManager.HasNotesColor);
+            string sNotesColor = ColorTranslator.ToHtml(ColorManager.HasNotesColor);
             objNode.TryGetStringFieldQuickly("notesColor", ref sNotesColor);
             _colNotes = ColorTranslator.FromHtml(sNotesColor);
 
@@ -1755,6 +1763,7 @@ namespace Chummer.Backend.Equipment
                     _guiWeaponID = guiTemp;
             }
         }
+
         /// <summary>
         /// Guid of a Cyberware Weapon Accessory.
         /// </summary>
@@ -2611,7 +2620,8 @@ namespace Chummer.Backend.Equipment
                         x.MaxRating.Contains("Parent") || x.MinRating.Contains("Parent")))
                     {
                         // This will update a child's rating if it would become out of bounds due to its parent's rating changing
-                        objChild.Rating = objChild.Rating;
+                        int intCurrentRating = objChild.Rating;
+                        objChild.Rating = intCurrentRating;
                     }
                 }
                 DoPropertyChanges(true, false);
@@ -4634,41 +4644,48 @@ namespace Chummer.Backend.Equipment
         /// <summary>
         /// Checks a nominated piece of gear for Availability requirements.
         /// </summary>
-        /// <param name="blnRestrictedGearUsed">Whether Restricted Gear is already being used.</param>
-        /// <param name="intRestrictedCount">Amount of gear that is currently over the availability limit.</param>
-        /// <param name="strAvailItems">String used to list names of gear that are currently over the availability limit.</param>
-        /// <param name="strRestrictedItem">Item that is being used for Restricted Gear.</param>
-        /// <param name="strCyberwareGrade">String used to list names of cyberware that have a banned cyberware grade.</param>
-        /// <param name="blnOutRestrictedGearUsed">Whether Restricted Gear is already being used (tracked across gear children).</param>
-        /// <param name="intOutRestrictedCount">Amount of gear that is currently over the availability limit (tracked across gear children).</param>
-        /// <param name="strOutAvailItems">String used to list names of gear that are currently over the availability limit (tracked across gear children).</param>
-        /// <param name="strOutRestrictedItem">Item that is being used for Restricted Gear (tracked across gear children).</param>
-        /// <param name="strOutCyberwareGrade">String used to return list names of cyberware that have a banned cyberware grade</param>
-        public void CheckRestrictedGear(bool blnRestrictedGearUsed, int intRestrictedCount, string strAvailItems,
-            string strRestrictedItem, string strCyberwareGrade, out bool blnOutRestrictedGearUsed,
-            out int intOutRestrictedCount, out string strOutAvailItems, out string strOutRestrictedItem,
-            out string strOutCyberwareGrade)
+        /// <param name="dicRestrictedGearLimits">Dictionary of Restricted Gear availabilities still available with the amount of items that can still use that availability.</param>
+        /// <param name="sbdAvailItems">StringBuilder used to list names of gear that are currently over the availability limit.</param>
+        /// <param name="sbdRestrictedItems">StringBuilder used to list names of gear that are being used for Restricted Gear.</param>
+        /// <param name="intRestrictedCount">Number of items that are above availability limits.</param>
+        public void CheckRestrictedGear(IDictionary<int, int> dicRestrictedGearLimits, StringBuilder sbdAvailItems, StringBuilder sbdRestrictedItems, ref int intRestrictedCount)
         {
             if (string.IsNullOrEmpty(ParentID))
             {
-                if (_objCharacter.Settings.BannedWareGrades.Any(s => Grade.Name.Contains(s)))
-                    strCyberwareGrade += Environment.NewLine + "\t\t" + DisplayNameShort(GlobalSettings.Language);
-
                 AvailabilityValue objTotalAvail = TotalAvailTuple();
                 if (!objTotalAvail.AddToParent)
                 {
                     int intAvailInt = objTotalAvail.Value;
                     if (intAvailInt > _objCharacter.Settings.MaximumAvailability)
                     {
-                        if (intAvailInt <= _objCharacter.RestrictedGear && !blnRestrictedGearUsed)
+                        int intLowestValidRestrictedGearAvail = -1;
+                        foreach (int intValidAvail in dicRestrictedGearLimits.Keys)
                         {
-                            blnRestrictedGearUsed = true;
-                            strRestrictedItem = CurrentDisplayName;
+                            if (intValidAvail >= intAvailInt && (intLowestValidRestrictedGearAvail < 0
+                                                                 || intValidAvail < intLowestValidRestrictedGearAvail))
+                                intLowestValidRestrictedGearAvail = intValidAvail;
+                        }
+
+                        string strNameToUse = Parent == null
+                            ? CurrentDisplayName
+                            : string.Format(GlobalSettings.CultureInfo, "{0}{1}({2})",
+                                            CurrentDisplayName, LanguageManager.GetString("String_Space"),
+                                            Parent.CurrentDisplayName);
+
+                        if (Grade.Avail != 0)
+                            strNameToUse += LanguageManager.GetString("String_Space") + '(' + Grade.CurrentDisplayName + ')';
+
+                        if (intLowestValidRestrictedGearAvail >= 0
+                            && dicRestrictedGearLimits[intLowestValidRestrictedGearAvail] > 0)
+                        {
+                            dicRestrictedGearLimits[intLowestValidRestrictedGearAvail] -= 1;
+                            sbdRestrictedItems.Append(Environment.NewLine + "\t\t" + strNameToUse);
                         }
                         else
                         {
-                            intRestrictedCount++;
-                            strAvailItems += Environment.NewLine + "\t\t" + DisplayNameShort(GlobalSettings.Language);
+                            dicRestrictedGearLimits.Remove(intLowestValidRestrictedGearAvail);
+                            ++intRestrictedCount;
+                            sbdAvailItems.Append(Environment.NewLine + "\t\t" + strNameToUse);
                         }
                     }
                 }
@@ -4676,23 +4693,25 @@ namespace Chummer.Backend.Equipment
 
             foreach (Cyberware objChild in Children)
             {
-                objChild.CheckRestrictedGear(blnRestrictedGearUsed, intRestrictedCount, strAvailItems,
-                    strRestrictedItem, strCyberwareGrade, out blnRestrictedGearUsed, out intRestrictedCount,
-                    out strAvailItems, out strRestrictedItem, out strCyberwareGrade);
+                objChild.CheckRestrictedGear(dicRestrictedGearLimits, sbdAvailItems, sbdRestrictedItems, ref intRestrictedCount);
             }
 
             foreach (Gear objChild in GearChildren)
             {
-                objChild.CheckRestrictedGear(blnRestrictedGearUsed, intRestrictedCount, strAvailItems,
-                    strRestrictedItem, out blnRestrictedGearUsed, out intRestrictedCount, out strAvailItems,
-                    out strRestrictedItem);
+                objChild.CheckRestrictedGear(dicRestrictedGearLimits, sbdAvailItems, sbdRestrictedItems, ref intRestrictedCount);
             }
+        }
 
-            strOutAvailItems = strAvailItems;
-            intOutRestrictedCount = intRestrictedCount;
-            blnOutRestrictedGearUsed = blnRestrictedGearUsed;
-            strOutRestrictedItem = strRestrictedItem;
-            strOutCyberwareGrade = strCyberwareGrade;
+        public void CheckBannedGrades(StringBuilder sbdBannedItems)
+        {
+            if (string.IsNullOrEmpty(ParentID) && _objCharacter.Settings.BannedWareGrades.Any(s => Grade.Name.Contains(s)))
+            {
+                sbdBannedItems.Append(Environment.NewLine + "\t\t" + CurrentDisplayName);
+            }
+            foreach (Cyberware objChild in Children)
+            {
+                objChild.CheckBannedGrades(sbdBannedItems);
+            }
         }
 
         #region UI Methods
@@ -4801,27 +4820,30 @@ namespace Chummer.Backend.Equipment
                 List<Grade> objBiowareGradeList = _objCharacter.GetGradeList(Improvement.ImprovementSource.Bioware);
                 if (objSelectedGrade == null)
                 {
+                    bool blnDoBiowareGradeCheck = true;
                     foreach (Grade objCyberwareGrade in objCyberwareGradeList)
                     {
                         if (strOriginalName.EndsWith(" (" + objCyberwareGrade.Name + ')', StringComparison.Ordinal))
                         {
                             strGradeName = objCyberwareGrade.Name;
                             strOriginalName = strOriginalName.TrimEndOnce(" (" + objCyberwareGrade.Name + ')');
-                            goto EndGradeCheck;
-                        }
-                    }
-
-                    foreach (Grade objCyberwareGrade in objBiowareGradeList)
-                    {
-                        if (strOriginalName.EndsWith(" (" + objCyberwareGrade.Name + ')', StringComparison.Ordinal))
-                        {
-                            strGradeName = objCyberwareGrade.Name;
-                            strOriginalName = strOriginalName.TrimEndOnce(" (" + objCyberwareGrade.Name + ')');
+                            blnDoBiowareGradeCheck = false;
                             break;
                         }
                     }
 
-                EndGradeCheck:;
+                    if (blnDoBiowareGradeCheck)
+                    {
+                        foreach (Grade objCyberwareGrade in objBiowareGradeList)
+                        {
+                            if (strOriginalName.EndsWith(" (" + objCyberwareGrade.Name + ')', StringComparison.Ordinal))
+                            {
+                                strGradeName = objCyberwareGrade.Name;
+                                strOriginalName = strOriginalName.TrimEndOnce(" (" + objCyberwareGrade.Name + ')');
+                                break;
+                            }
+                        }
+                    }
                 }
 
                 XmlDocument xmlCyberwareDocument = _objCharacter.LoadData("cyberware.xml");
@@ -5168,7 +5190,7 @@ namespace Chummer.Backend.Equipment
             int intRating, Vehicle objVehicle, ICollection<Cyberware> lstCyberwareCollection,
             ICollection<Vehicle> lstVehicleCollection, ICollection<Weapon> lstWeaponCollection,
             decimal decMarkup = 0, bool blnFree = false, bool blnBlackMarket = false, bool blnForVehicle = false,
-            string strExpenseString = "String_ExpensePurchaseCyberware",Cyberware objParent = null)
+            string strExpenseString = "String_ExpensePurchaseCyberware", Cyberware objParent = null)
         {
             // Create the Cyberware object.
             List<Weapon> lstWeapons = new List<Weapon>(1);
@@ -5258,7 +5280,7 @@ namespace Chummer.Backend.Equipment
             }
             else
             {
-                if (_objCharacter.Created && lstCyberwareCollection == _objCharacter.Cyberware)
+                if (_objCharacter.Created && ReferenceEquals(lstCyberwareCollection, _objCharacter.Cyberware))
                 {
                     _objCharacter.DecreaseEssenceHole(CalculatedESS, SourceID == EssenceAntiHoleGUID);
                 }
